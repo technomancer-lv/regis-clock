@@ -2,17 +2,17 @@
 
 #This program is a simple 7-segment clock that's being displayed on a DEC ReGIS compatible graphics terminals.
 #todo:
+#	properly handle exceptions
+#	add some proper exit function
 #	test various flow control modes
-#	test this program in stdout mode
-#	add and test screen clearing on startup
-#	switch off cursor at the start and swotch it back on at the end
+#	switch off cursor at the start and switch it back on at the end
+#	add AM/PM mode?
 
 #Config parameters:
 #OutputType - interface that's connected to the terminal.
 #	stdout - terminal is connected as a system console
 #	serial - terminal is connected to a serial port that's not a system console
-OutputType="serial"
-#OutputType="stdout"
+OutputType="stdout"
 
 #SerPort - if Output Type is serial, this is the port the terminal is connected to.
 #Otherwise, this parameter is unused.
@@ -29,7 +29,7 @@ SerSpeed=4800
 #	none - no flow control is used
 #	xonxoff - software flow control
 #	rts - hardware flow control that uses RTS and CTS signals
-SerFlowControl="rts"
+SerFlowControl="none"
 
 import sys
 import time
@@ -50,6 +50,7 @@ SegmentArray=["11111100","01100000","11011010","11110010","01100110","10110110",
 
 #SegmentCode is the part of the ReGIS commant, that's used to draw a corresponding
 #segment. First array entry is segment A, last one is G.
+#After drawing each segment, the graphics cursor is returned to the starting point.
 SegmentCode=[]
 SegmentCode.append("P(B)[+22,+18],V[+27,+10],[+85,+0],[+13,-28],[-105,+0],C(S)[+0,+0],[-12,+6],[-8,+12],[](E),P(E),")
 SegmentCode.append("P(B)[+155,+0],V[-14,+28],[-7,+74],[+19,+22],[+8,-8],[+9,-98],C(S)[+0,+0],[-5,-12],[-10,-6],[](E),P(E),")
@@ -91,7 +92,8 @@ def	DrawDigit(Digit,Xcoord,Ycoord):
 	if(OutputType=="serial"):
 		ser.write(RegisString)
 	else:
-		print(RegisString)
+		sys.stdout.write(RegisString)
+		sys.stdout.flush()
 
 #DrawDots is the function that draws the two dots between hours and minutes
 def	DrawDots():
@@ -101,29 +103,45 @@ def	DrawDots():
 		ser.write("P[395,268],C[+17],")
 		ser.write("\x1B\\")
 	else:
-		print "\x1BP0p,P[405,166],C[+17],P[395,268],C[+17],\x1B\\"
+		sys.stdout.write("\x1BP0p,P[405,166],C[+17],P[395,268],C[+17],\x1B\\")
+		sys.stdout.flush()
 
 #Erase screen clears the screen from the ReGIS graphics
 def	EraseScreen():
 	if(OutputType=="serial"):
 		ser.write("\x1BP0p,S(E),\x1B\\")
 	else:
-		print "\x1BP0p,S(E),\x1B\\"
+		sys.stdout.write("\x1BP0p,S(E),\x1B\\")
+		sys.stdout.flush()
 
 
 #Program starts here
 try:
 	#Opens serial port if it should be used
 	if(OutputType=="serial"):
-		ser=serial.Serial(SerPort,SerSpeed,xonxoff=True)
+		if(SerFlowControl=="none"):
+			ser=serial.Serial(SerPort,SerSpeed)
+		elif(SerFlowControl=="xonxoff"):
+			ser=serial.Serial(SerPort,SerSpeed,xonxoff=True)
+		elif(SerFlowControl=="rtscts"):
+			ser=serial.Serial(SerPort,SerSpeed,rtscts=True)
+		elif(SerFlowControl=="dsrdtr"):
+			ser=serial.Serial(SerPort,SerSpeed,dsrdtr=True)
+
+		ser.write("\x1B[f\x1B[J")	#Erases text on the screen
+	else:
+		sys.stdout.write("\x1B[f\x1B[J")
+		sys.stdout.flush()
 
 	#Initialises a variable that is being used to check if the minute has passed
 	oldmin=""
+	#Constant loop that updates the digits every minute
 	while(1):
+		#Checks if minute digit has changed
 		newmin=time.strftime("%M")
 		if(oldmin!=newmin):
 			oldmin=newmin
-			print newmin
+			#Erases the screen and shows updated numbers
 			EraseScreen()
 			hours=time.strftime("%H")
 			DrawDigit(ord(hours[0])-48,15,90)
@@ -131,9 +149,6 @@ try:
 			DrawDots()
 			DrawDigit(ord(newmin[0])-48,435,90)
 			DrawDigit(ord(newmin[1])-48,615,90)
-
-except:
-	print "something went wrong"
 
 finally:
 	EraseScreen()
