@@ -1,5 +1,5 @@
 # regis-clock
-Project status - ongoing.
+Project status - in development.
 
 A python program for displaying a digital clock on the ReGIS compatible computer terminals.
 
@@ -9,3 +9,4 @@ Todo:
 - add proper exception handling
 - add AM/PM mode
 - test flow control modes
+- test on other hardware
